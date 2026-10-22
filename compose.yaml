@@ -1,0 +1,20 @@
+name: php2shell-educativo
+services:
+  cve-109618:
+    container_name: php2shell-linkedin-109618
+    build: ./CVE-2026-109618
+    image: php2shell-educativo:109618
+    ports:
+      - "127.0.0.1:18118:80"
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+  cve-109619:
+    container_name: php2shell-linkedin-109619
+    build: ./CVE-2026-109619
+    image: php2shell-educativo:109619
+    ports:
+      - "127.0.0.1:18119:80"
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true

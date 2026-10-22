@@ -1,0 +1,113 @@
+PHP2SHELL | GUIA PRACTICA PASO A PASO | 22/10/2026
+==================================================
+Proyecto educativo de Alejandro Aránguez Romera.
+
+OBJETIVO: entender el punto de entrada y las condiciones técnicas de dos CVE.
+NO ES una prueba de explotación real de ninguna CVE.
+
+0. PREPARACION
+---------------
+Instalar Docker Engine, curl y Python 3. Docker Compose V2 es opcional: si
+no está disponible, el script usa docker build / docker run automáticamente.
+El ZIP incluye Dockerfiles:
+al arrancar, Docker descargará las imágenes oficiales PHP 8.3.35-apache.
+
+    unzip PHP2Shell_LinkedIn_Lab.zip
+    cd PHP2Shell_LinkedIn_Lab
+    ./00_iniciar.sh
+    docker ps --filter name=php2shell-linkedin-
+
+Ver en navegador:
+    CVE-2026-109618: http://127.0.0.1:18118/
+    CVE-2026-109619: http://127.0.0.1:18119/
+
+1. VERSION Y TIPO DE SERVIDOR
+-----------------------------
+    curl -sS http://127.0.0.1:18118/inspeccionar.php | python3 -m json.tool
+
+¿QUE ESTAS VIENDO?
+  php_version: PHP 8.3.35, anterior a 8.3.36 (versión corregida).
+  sapi: apache2handler; no es PHP-FPM ni el PHP CLI.
+  worker_pid: PID del proceso que ejecutó el código PHP.
+  directivas: valores efectivos que PHP aplica en la petición.
+
+QUE DEMUESTRA: versión/SAPI/configuración del entorno de laboratorio.
+QUE NO DEMUESTRA: explotación, OOM, UAF o ejecución no autorizada.
+
+2. CVE-2026-109618 - MULTIPART Y OOM
+------------------------------------
+    curl -sS -F 'usuario=alumno' -F 'tema=PHP2Shell' \
+      http://127.0.0.1:18118/inspeccionar.php | python3 -m json.tool
+
+¿QUE ESTAS VIENDO?
+  peticion.metodo = POST
+  peticion.content_type = multipart/form-data; boundary=...
+  peticion.campos_post_recibidos = ["usuario", "tema"]
+  memory_limit = 128M | post_max_size = 8M | max_file_uploads = 20
+  max_input_nesting_level = 64 | upload_max_filesize = 2M
+  memoria_php_bytes_al_entrar_en_el_script: estimación local, NO perfil del parser.
+
+POR QUE IMPORTA:
+  El fallo real está en el manejo interno de OOM con longjmp(): una
+  asignación falla en un momento en que algunas estructuras no se han
+  inicializado completamente. El flujo puede saltar a limpieza y consumir
+  memoria inválida. Apache mod_php puede llegar a ese escenario incluso
+  antes de ejecutar el script de la aplicación.
+
+LIMITACION: la petición de esta guía es deliberadamente pequeña;
+NO dispara OOM ni corrupción de memoria.
+
+3. CVE-2026-109619 - WORKERS Y MEMORIA YA LIBERADA
+--------------------------------------------------
+    for i in 1 2 3; do curl -sS http://127.0.0.1:18119/inspeccionar.php \
+      | python3 -c 'import sys,json; print(json.load(sys.stdin)["worker_pid"])'; done
+
+¿QUE ESTAS VIENDO?
+  Repite el PID con un Apache mod_php configurado con un worker.
+  Una petición termina pero el worker sobrevive a la siguiente.
+
+POR QUE IMPORTA:
+  Productor -> referencia global a memoria de una petición.
+  Limpieza incompleta -> termina la petición, libera memoria.
+  Consumidor -> una operación de otra petición usa esa referencia obsoleta.
+  El uso posterior de memoria liberada se denomina use-after-free (UAF).
+
+LIMITACION: un PID repetido es normal; no acredita que exista UAF.
+
+4. IMPACTO POTENCIAL DE RCE (EMULACION INTENCIONAL)
+--------------------------------------------------
+    curl -sS 'http://127.0.0.1:18119/impacto_controlado.php?accion=identidad' \
+      | python3 -m json.tool
+    curl -sS 'http://127.0.0.1:18119/impacto_controlado.php?accion=leer_demo' \
+      | python3 -m json.tool
+    curl -sS 'http://127.0.0.1:18119/impacto_controlado.php?accion=crear_marca' \
+      | python3 -m json.tool
+    docker exec php2shell-linkedin-109619 cat /tmp/php2shell_marca_educativa.txt
+
+¿QUE ESTAS VIENDO?
+  IDENTIDAD: ejecuta un único comando FIJO 'id' dentro del contenedor.
+  LECTURA: recupera exclusivamente un archivo de ejemplo inventado.
+  ESCRITURA: deja una marca inofensiva en /tmp dentro del contenedor.
+
+NO ES UNA RCE POR LA CVE: el programa acepta estas acciones deliberadamente.
+La comparación sirve para ilustrar qué permisos tendría una ejecución de
+código si una vulnerabilidad real permitiera obtenerla.
+
+5. VALIDACION Y LOGS
+--------------------
+    docker logs --tail=50 php2shell-linkedin-109618
+    docker logs --tail=50 php2shell-linkedin-109619
+    docker ps --filter name=php2shell-linkedin-
+    ./01_probar_paso_a_paso.sh
+
+6. LIMPIEZA
+-----------
+    ./99_detener.sh
+
+ACTUALIZACION: PHP 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12.
+El parche de PHP es la defensa completa; solo ajustar memory_limit,
+post_max_size u otras directivas no sustituye actualizar.
+
+REFERENCIAS PRIMARIAS:
+https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
+https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp

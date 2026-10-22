@@ -1,0 +1,4 @@
+.git
+*.zip
+*.pdf
+__pycache__
