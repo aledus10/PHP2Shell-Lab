@@ -1,5 +1,14 @@
 # PHP2Shell - laboratorio educativo para LinkedIn
 
+**Para descargarlo y empezar a hacer pruebas
+```bash
+git clone https://github.com/aledus10/PHP2Shell-Lab.git
+cd PHP2Shell-Lab
+./00_iniciar.sh
+./01_probar_paso_a_paso.sh
+```
+
+
 **Dos CVE reales. Dos contenedores Docker. Observación reproducible y una emulación de impacto claramente identificada.**
 
 Fecha de revisión: **22 de octubre de 2026**. Autor del proyecto educativo: **Alejandro Aránguez Romera**.
