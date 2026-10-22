@@ -1,6 +1,6 @@
 # PHP2Shell - laboratorio educativo para LinkedIn
 
-**Para descargarlo y empezar a hacer pruebas
+**Para descargarlo y empezar a hacer pruebas**
 ```bash
 git clone https://github.com/aledus10/PHP2Shell-Lab.git
 cd PHP2Shell-Lab
